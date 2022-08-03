@@ -1,9 +1,19 @@
-try:
-    %load_ext autotime
-except:
-    !pip install ipython-autotime
-    %load_ext autotime
-!pip install numpy matplotlib tqdm scipy seaborn rich pandas bokeh
+"""
+Program to perform Difference Of Means power anaysis on given data and guessing the right key.
+"""
+import numpy as np
+from tqdm import trange
+from os import system, name
+
+
+def clear():
+    #to clear screen
+    if name == 'nt':    # for windows
+        _ = system('cls')
+  
+    else:               # for mac and linux(here, os.name is 'posix')
+        _ = system('clear')
+
 def sbox(inp):
     s =  [0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67,
             0x2b, 0xfe, 0xd7, 0xab, 0x76, 0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59,
@@ -61,42 +71,20 @@ def invsbox(inp):
 def intermediate(pt, keyguess):
     return sbox(pt ^ keyguess)
 
-HW = [bin(n).count("1") for n in range(0, 256)]
-import numpy as np
-import matplotlib.pyplot as plt
-from tqdm.notebook import tnrange
-from scipy.stats import linregress
-import seaborn as sns
-import time
-import rich as r
-import pandas as pd
-from IPython.display import clear_output # type: ignore
-from bokeh.plotting import figure, show
-from bokeh.io import output_notebook
-from bokeh.palettes import brewer
+trace_array=np.load("trace_array.npy")
+textin_array=np.load("textin_array.npy")
+textout_array=np.load("textout_array.npy")
 
-known_keys = np.load('traces/known_keys.npy')
-textin_array = np.load('traces/textin_array.npy')
-trace_array = np.load('traces/trace_array.npy')
-textout_array = np.load('traces/textout_array.npy')
-
-print(known_keys.shape)
-print(textin_array.shape)
-print(textout_array.shape)
-print(trace_array.shape)
-output_notebook()
-p = figure(plot_width=1000, plot_height=400)
-p.line(range(len(trace_array[0])),trace_array[0])
-
-show(p)
-# DOM Attack
 mean_diffs = np.zeros(256)
 key_guess = []
-# numtraces = trace_array.shape[0]
 numtraces = 500    # number of traces to use
 
-for subkey in tnrange(0, 16, desc="Total Progress"):
-    for kguess in tnrange(256, desc=f"Attacking Subkey {subkey}", leave=False):
+clear()
+for subkey in trange(16, desc="Total Progress: "):
+    if subkey!=0:
+        print(" "+str(subkey)+" keys found")
+
+    for kguess in trange(256, desc=f"Attacking key {subkey+1}"):
         one_list = []
         zero_list = []
 
@@ -112,148 +100,9 @@ for subkey in tnrange(0, 16, desc="Total Progress"):
 
     guess = np.argsort(mean_diffs)[-1]
     key_guess.append(guess)
-    clear_output(wait=True)
-    display(key_guess)
+    clear()
+    
 
-# [41, 214, 225, 202, 173, 88, 173, 71, 14, 46, 66, 6, 184, 104, 198, 50]
-# Printing in hex
-print("guess: ", [hex(x)[2:] for x in key_guess])
-print("actual: ", [hex(x)[2:] for x in known_keys[0]])
-# For styling the output only
-
-fmt = "{:02X}<br>{:.3f}"
-def format_stat(stat):
-    return str(fmt.format(stat[0], stat[1]))
-
-def color_corr_key(row):
-    # print(len(row))
-    ret = [""] * len(row)
-    for i, bnum in enumerate(row):
-        if i == 0:
-            ret[i] = "color: green"
-        else:
-            ret[i] = "color: red"
-    return ret
-mean_diffs = np.zeros(256)
-key_guess = []
-numtraces = trace_array.shape[0]
-# numtraces = 350
-plots = []
-printable = []
-
-for subkey in tnrange(0, 16, desc="Total Progress"):
-    temp = []  # to store the keybyte and the dom
-    for kguess in tnrange(256, desc=f"Attacking Subkey {subkey}", leave=False):
-        one_list = []
-        zero_list = []
-
-        for trace_no in range(numtraces):
-            if (intermediate(textin_array[trace_no][subkey], kguess) & 1):
-                one_list.append(trace_array[trace_no])
-            else:
-                zero_list.append(trace_array[trace_no])
-
-        one_avg = np.asarray(one_list).mean(axis=0)
-        zero_avg = np.asarray(zero_list).mean(axis=0)
-        mean_diffs[kguess] = np.max(abs(one_avg - zero_avg))
-
-        temp.append((kguess, mean_diffs[kguess]))  # add the data kguess, dom
-
-        if kguess == known_keys[0][subkey]:
-            plots.append(one_avg - zero_avg)
-
-    temp.sort(key = lambda x: -x[1])  # sort temp by dom value
-    printable.append(temp)  # add the data in list
-    df = pd.DataFrame(printable).transpose()
-
-    guess = np.argsort(mean_diffs)[-1]
-    key_guess.append(guess)
-
-    clear_output(wait=True)  # clear the previous output
-    display(df.head().style.format(format_stat).apply(color_corr_key, axis=0))  # display the current status
-## Using a better leakage model (Hamming weight)
-# mean_diffs = np.zeros(256)
-key_guess = []
-# numtraces = trace_array.shape[0]
-numtraces = 500
-plots = []
-printable = []
-DOM = []
-
-for subkey in tnrange(0, 16, desc="Total Progress"):
-    temp = []
-    mean_diffs = np.zeros(256)
-    for kguess in tnrange(256, desc=f"Attacking Subkey {subkey}", leave=False):
-        one_list = []
-        zero_list = []
-
-        for trace_no in range(numtraces):
-            hw = HW[intermediate(textin_array[trace_no][subkey], kguess)]
-            if hw > 4:
-                one_list.append(trace_array[trace_no])
-            else:
-                zero_list.append(trace_array[trace_no])
-
-        one_avg = np.asarray(one_list).mean(axis=0)
-        zero_avg = np.asarray(zero_list).mean(axis=0)
-        mean_diffs[kguess] = np.max(abs(one_avg - zero_avg))
-
-        temp.append((kguess, mean_diffs[kguess]))  # add the data kguess, dom
-
-        if kguess == known_keys[0][subkey]:
-            plots.append(one_avg - zero_avg)
-
-    DOM.append(mean_diffs)
-    temp.sort(key = lambda x: -x[1])  # sort temp by dom value
-    printable.append(temp)  # add the data in list
-    df = pd.DataFrame(printable).transpose()
-
-    guess = np.argsort(mean_diffs)[-1]
-    key_guess.append(guess)
-
-    clear_output(wait=True)  # clear the previous output
-    display(df.head().style.format(format_stat).apply(color_corr_key, axis=0))  # display the current status
-
-num_subkeys = 1
-plt.figure(figsize=(20,8))
-sns.set_style("whitegrid", {"axes.facecolor": "1"})
-sns.set_context("notebook", font_scale=1, rc={"lines.linewidth": 1.5})
-
-for i in range(num_subkeys):
-    sns.scatterplot(x=range(1500), y=plots[i][0:1500], alpha=0.5, )
-
-plt.legend(["Subkey {}".format(x) for x in range(num_subkeys)])
-plt.title("DOM vs Time for correct Keyguess")
-plt.xlabel("Time")
-plt.ylabel("Difference of Meam")
-plt.show()
-selected_subkey = 10
-
-plt.figure(figsize=(20,8))
-sns.scatterplot(x=range(DOM[selected_subkey].shape[0]), y=DOM[selected_subkey])
-
-for i in range(256):
-    max_dom = DOM[selected_subkey].max()
-    if DOM[selected_subkey][i] == max_dom:
-        plt.text(x=i + 1, y=max_dom + 0.0001, s=str(i))
-
-plt.title("DOM vs Guessed Keys")
-plt.xlabel("Guessed Keys")
-plt.ylabel("Difference of Meam")
-plt.show()
-fig, axs = plt.subplots(nrows=16, ncols=1, figsize=(20, 30))
-plt.subplots_adjust(hspace=0.5)
-colors = plt.rcParams["axes.prop_cycle"]()
-# fig.suptitle("DOM", fontsize=18, y=0.95)
-
-for _, ax in enumerate(axs):
-    c = next(colors)["color"]
-    # ax.plot(plots[_][0:1500], alpha=0.5)
-    ax.scatter(range(256), y=DOM[_], color=c, alpha=0.5)
-    for i in range(256):
-        max_dom = DOM[_].max()
-        if DOM[_][i] == max_dom:
-            ax.text(x=i + 1, y=max_dom + 0.0001, s=str(i))
-    ax.set_title("Subkey {}".format(_))
-plt.show()
-%unload_ext autotime
+print("\nThe key is: ", key_guess)
+print("Program finished.")
+print("HAPPY HACKING! :)")
