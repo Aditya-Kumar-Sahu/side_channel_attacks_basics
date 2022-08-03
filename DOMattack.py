@@ -81,10 +81,8 @@ numtraces = 500    # number of traces to use
 
 clear()
 for subkey in trange(16, desc="Total Progress: "):
-    if subkey!=0:
-        print(" "+str(subkey)+" keys found")
-
-    for kguess in trange(256, desc=f"Attacking key {subkey+1}"):
+    print()
+    for kguess in trange(256, desc=f"Attacking subkey {subkey+1}"):
         one_list = []
         zero_list = []
 
@@ -105,4 +103,3 @@ for subkey in trange(16, desc="Total Progress: "):
 
 print("\nThe key is: ", key_guess)
 print("Program finished.")
-print("HAPPY HACKING! :)")
